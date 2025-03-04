@@ -1,15 +1,13 @@
-# Используем официальный образ Python 3.12 на Alpine
-FROM python:3.12-alpine
+# Используем официальный образ Python 3.12-slim
+FROM python:3.12-slim
 
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
 # Устанавливаем системные зависимости (если нужны)
-RUN apk update && apk add --no-cache \
-    gcc \
-    musl-dev \
-    libffi-dev \
-    && rm -rf /var/cache/apk/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 # Копируем зависимости
 COPY requirements.txt .
