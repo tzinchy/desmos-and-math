@@ -42,7 +42,7 @@ strategies = {
     'Всегда сотрудничать': lambda _, oh: 'cooperate',
     'Всегда предавать': lambda _, oh: 'betray',
     'Случайный выбор': lambda _, oh: random.choice(['cooperate', 'betray']),
-    'Око за око': lambda _, oh: 'cooperate' if not oh else oh[-1],
+    'Око за око': lambda mh, oh: 'betray' if len(mh) >= 2 and mh[-1] == 'betray' and mh[-2] == 'betray' else 'cooperate',
     'Подозрительное око': lambda mh, oh: 'betray' if not mh else oh[-1]
 }
 
@@ -66,48 +66,118 @@ def init_game_state():
             'user_id': None
         }
 
-def show_stats():
-    st.header("📊 Статистика игроков")
+def show_moves():
+    """Функция для отображения ходов"""
+    # Ходы пользователя
+    st.markdown("**Ваши ходы**")
+    cols = st.columns(10)
+    for i in range(10):
+        if i < len(st.session_state.game['user_choices']):
+            move = st.session_state.game['user_choices'][i]
+            color = "green" if move == "cooperate" else "red"
+            cols[i].markdown(f"<div style='background-color: {color}; border-radius: 50%; width: 30px; height: 30px;'></div>", 
+                           unsafe_allow_html=True)
+        else:
+            cols[i].markdown(f"<div style='background-color: lightgray; border-radius: 50%; width: 30px; height: 30px;'></div>", 
+                           unsafe_allow_html=True)
     
-    # Лучшие игроки
+    # Ходы бота
+    st.markdown("**Ходы бота**")
+    cols = st.columns(10)
+    for i in range(10):
+        if i < len(st.session_state.game['bot_choices']):
+            move = st.session_state.game['bot_choices'][i]
+            color = "green" if move == "cooperate" else "red"
+            cols[i].markdown(f"<div style='background-color: {color}; border-radius: 50%; width: 30px; height: 30px;'></div>", 
+                           unsafe_allow_html=True)
+        else:
+            cols[i].markdown(f"<div style='background-color: lightgray; border-radius: 50%; width: 30px; height: 30px;'></div>", 
+                           unsafe_allow_html=True)
+
+def show_stats():
+    st.header("📊 Статистика игроков и стратегий")
+    
+    # Топ игроков по общему количеству баллов
+    st.subheader("Топ игроков по общему количеству баллов")
     cursor.execute('''
-        SELECT u.username, SUM(g.user_score), COUNT(g.id)
+        SELECT u.username, SUM(g.user_score) as total_score
         FROM games g
         JOIN users u ON g.user_id = u.id
         GROUP BY u.username
-        ORDER BY SUM(g.user_score) DESC
-        LIMIT 10''')
-    players = cursor.fetchall()
+        ORDER BY total_score DESC
+        LIMIT 10
+    ''')
+    top_players = cursor.fetchall()
     
-    df_players = pd.DataFrame(players, columns=['Игрок', 'Очки', 'Игр'])
-    fig1 = px.bar(df_players, x='Игрок', y='Очки', title="Топ игроков по очкам")
+    df_top_players = pd.DataFrame(top_players, columns=['Игрок', 'Общее количество баллов'])
+    fig1 = px.bar(df_top_players, x='Игрок', y='Общее количество баллов', title="Топ игроков по баллам")
     st.plotly_chart(fig1)
     
-    # Эффективность стратегий
+    # Средние баллы по стратегиям
+    st.subheader("Средние баллы по стратегиям")
     cursor.execute('''
-        SELECT opponent_strategy, 
-               AVG(user_score),
-               COUNT(*),
-               SUM(CASE WHEN result='loss' THEN 1 ELSE 0 END) AS bot_wins
+        SELECT opponent_strategy, AVG(user_score) as avg_score
         FROM games
-        GROUP BY opponent_strategy''')
-    strats = cursor.fetchall()
+        GROUP BY opponent_strategy
+    ''')
+    avg_scores = cursor.fetchall()
     
-    df_strats = pd.DataFrame(strats, columns=['Стратегия', 'Средние очки', 'Игр', 'Победы бота'])
-    fig2 = px.pie(df_strats, names='Стратегия', values='Игр', title="Распределение стратегий")
+    df_avg_scores = pd.DataFrame(avg_scores, columns=['Стратегия', 'Средние баллы'])
+    fig2 = px.bar(df_avg_scores, x='Стратегия', y='Средние баллы', title="Средние баллы по стратегиям")
     st.plotly_chart(fig2)
     
-    # Линейный график побед бота
+    # Общее количество баллов по стратегиям
+    st.subheader("Общее количество баллов по стратегиям")
+    cursor.execute('''
+        SELECT opponent_strategy, SUM(user_score) as total_score
+        FROM games
+        GROUP BY opponent_strategy
+    ''')
+    total_scores = cursor.fetchall()
+    
+    df_total_scores = pd.DataFrame(total_scores, columns=['Стратегия', 'Общее количество баллов'])
+    fig3 = px.pie(df_total_scores, names='Стратегия', values='Общее количество баллов', title="Общее количество баллов по стратегиям")
+    st.plotly_chart(fig3)
+    
+    # Количество игр по стратегиям
+    st.subheader("Количество игр по стратегиям")
+    cursor.execute('''
+        SELECT opponent_strategy, COUNT(*) as games_count
+        FROM games
+        GROUP BY opponent_strategy
+    ''')
+    games_count = cursor.fetchall()
+    
+    df_games_count = pd.DataFrame(games_count, columns=['Стратегия', 'Количество игр'])
+    fig4 = px.bar(df_games_count, x='Стратегия', y='Количество игр', title="Количество игр по стратегиям")
+    st.plotly_chart(fig4)
+    
+    # Соотношение побед, поражений и ничьих
+    st.subheader("Соотношение побед, поражений и ничьих")
+    cursor.execute('''
+        SELECT result, COUNT(*) as result_count
+        FROM games
+        GROUP BY result
+    ''')
+    results = cursor.fetchall()
+    
+    df_results = pd.DataFrame(results, columns=['Результат', 'Количество'])
+    fig5 = px.pie(df_results, names='Результат', values='Количество', title="Соотношение побед, поражений и ничьих")
+    st.plotly_chart(fig5)
+    
+    # Линейный график побед бота по датам
+    st.subheader("Победы бота по датам")
     cursor.execute('''
         SELECT played_at, SUM(CASE WHEN result='loss' THEN 1 ELSE 0 END) AS bot_wins
         FROM games
         GROUP BY played_at
-        ORDER BY played_at''')
+        ORDER BY played_at
+    ''')
     bot_wins = cursor.fetchall()
     
     df_bot_wins = pd.DataFrame(bot_wins, columns=['Дата', 'Победы бота'])
-    fig3 = px.line(df_bot_wins, x='Дата', y='Победы бота', title="Победы бота по датам")
-    st.plotly_chart(fig3)
+    fig6 = px.line(df_bot_wins, x='Дата', y='Победы бота', title="Победы бота по датам")
+    st.plotly_chart(fig6)
 
 def play_round(user_choice):
     bot_choice = strategies[st.session_state.game['strategy']](
@@ -132,12 +202,26 @@ def play_round(user_choice):
     st.session_state.game['bot_choices'].append(bot_choice)
     st.session_state.game['round'] += 1
 
+    # Если раунд завершён, завершаем игру
+    if st.session_state.game['round'] >= 10:
+        st.session_state.game['round'] = 10  # Фиксируем на 10 раундах
+        st.rerun()  # Перезагружаем страницу для отображения результатов
+    else:
+        st.rerun()  # Обновляем интерфейс после каждого хода
+
 def show_game():
-    st.header("🎮 Игра: Око за око")
+    st.header("🎮 Игра: Cотрудничества и предательства")
     
     if st.session_state.game['round'] >= 10:
+        # Определение результата
+        if st.session_state.game['user_score'] > st.session_state.game['bot_score']:
+            result = 'win'
+        elif st.session_state.game['user_score'] < st.session_state.game['bot_score']:
+            result = 'loss'
+        else:
+            result = 'draw'  # Ничья
+        
         # Сохранение результатов
-        result = 'win' if st.session_state.game['user_score'] > st.session_state.game['bot_score'] else 'loss'
         cursor.execute('''
             INSERT INTO games 
             (user_id, opponent_strategy, user_score, opponent_score, result)
@@ -150,15 +234,27 @@ def show_game():
         conn.commit()
         
         # Показ результатов
-        st.success(f"Игра завершена! Результат: {result.upper()}")
+        if result == 'draw':
+            st.success("Игра завершена! Результат: НИЧЬЯ")
+        else:
+            st.success(f"Игра завершена! Результат: {result.upper()}")
         st.metric(label="Ваши очки", value=st.session_state.game['user_score'])
         st.metric(label="Очки бота", value=st.session_state.game['bot_score'])
+        st.write(f"Стратегия бота: **{st.session_state.game['strategy']}**")
         
-        # Сброс состояния
-        del st.session_state.game
+        # Показ всех ходов
+        show_moves()
+        
+        # Кнопка "Сыграть ещё раз"
+        if st.button("🔄 Сыграть ещё раз", use_container_width=True):
+            del st.session_state.game
+            st.rerun()
         return
 
     st.subheader(f"Раунд {st.session_state.game['round'] + 1}/10")
+    
+    # Показ текущих ходов
+    show_moves()
     
     col1, col2 = st.columns(2)
     with col1:
@@ -185,13 +281,86 @@ def shapes_page():
         где можно передвигать фигуры. Это отличный способ расслабиться и потренировать 
         свои навыки пространственного мышления.
     """)
-    st.markdown("[Перейти к фигурам](https://www.desmos.com/3d/pswxnacwyy)")
+    
+    st.write('''
+    # Добро пожаловать на страницу с фигурами!
+Здесь вы можете перейти на другой сайт, где можно передвигать фигуры. Это отличный способ расслабиться и потренировать свои навыки пространственного мышления.
+
+---
+
+## Уравнение конуса в трехмерном пространстве
+
+### Пояснение переменных:
+- **(x, y, z)** — координаты точки в трехмерном пространстве.
+  - **(x)** — перемещение влево-вправо.
+  - **(y)** — перемещение вперед-назад.
+  - **(z)** — перемещение вверх-вниз.
+- **(a_cone1)** — параметр, определяющий радиус основания конуса.
+  - Чем больше **(a_cone1)**, тем шире основание конуса.
+- **(h_cone1)** — параметр, определяющий высоту конуса.
+  - Чем больше **(h_cone1)**, тем выше конус.
+
+### Геометрический смысл:
+Уравнение описывает все точки **(x, y, z)**, которые лежат на поверхности конуса с вершиной в точке **(x_cone1, y_cone1, z_cone1)**. Параметры **(a_cone1)** и **(h_cone1)** задают форму конуса: его ширину и высоту.
+
+---
+
+## Уравнение куба в трехмерном пространстве
+
+Уравнение куба задается следующим образом:
+
+$$
+\\max(|x - x_{cube1}|, |y - y_{cube1}|, |z - z_{cube1}|) = a_{cube1}
+$$
+
+### Пояснение переменных:
+- **(x, y, z)** — координаты точки в трехмерном пространстве.
+  - **(x)** — перемещение влево-вправо.
+  - **(y)** — перемещение вперед-назад.
+  - **(z)** — перемещение вверх-вниз.
+- **(x_cube1, y_cube1, z_cube1)** — координаты центра куба.
+  - **(x_cube1)** — смещение центра куба по оси **(x)**.
+  - **(y_cube1)** — смещение центра куба по оси **(y)**.
+  - **(z_cube1)** — смещение центра куба по оси **(z)**.
+- **(a_cube1)** — параметр, определяющий половину длины ребра куба.
+  - Чем больше **(a_cube1)**, тем больше размер куба.
+
+### Геометрический смысл:
+Уравнение описывает все точки **(x, y, z)**, которые лежат на поверхности куба с центром в точке **(x_cube1, y_cube1, z_cube1)**. Параметр **(a_cube1)** задает размер куба.
+
+---
+
+## Уравнение сферы в трехмерном пространстве
+
+Уравнение сферы задается следующим образом:
+
+$$
+(x - x_{sphere3})^2 + (y - y_{sphere3})^2 + (z - z_{sphere3})^2 = r_{sphere3}^2
+$$
+
+### Пояснение переменных:
+- **(x, y, z)** — координаты точки в трехмерном пространстве.
+  - **(x)** — перемещение влево-вправо.
+  - **(y)** — перемещение вперед-назад.
+  - **(z)** — перемещение вверх-вниз.
+- **(x_sphere3, y_sphere3, z_sphere3)** — координаты центра сферы.
+  - **(x_sphere3)** — смещение центра сферы по оси **(x)**.
+  - **(y_sphere3)** — смещение центра сферы по оси **(y)**.
+  - **(z_sphere3)** — смещение центра сферы по оси **(z)**.
+- **(r_sphere3)** — радиус сферы.
+  - Чем больше **(r_sphere3)**, тем больше размер сферы.
+
+### Геометрический смысл:
+Уравнение описывает все точки **(x, y, z)**, которые лежат на поверхности сферы с центром в точке **(x_sphere3, y_sphere3, z_sphere3)**. Параметр **(r_sphere3)** задает размер сферы.
+''')
+
+    st.markdown("[Перейти к фигурам](https://www.desmos.com/3d/zwv1zeeada)")
 
 # Навигация
 page = st.sidebar.selectbox("Выберите страницу", ["Игра", "Статистика", "Фигуры"])
 
 if page == "Игра":
-    st.title("👁️ Око за око: Эволюция сотрудничества")
+    st.title("👁️ Эволюция сотрудничества")
     init_game_state()
     
     # Ввод имени пользователя
@@ -202,16 +371,10 @@ if page == "Игра":
     user_id = get_or_create_user(username)
     st.session_state.game['user_id'] = user_id
     
-    # Выбор стратегии
+    # Автоматический выбор случайной стратегии
     if not st.session_state.game['strategy']:
-        strategy = st.selectbox(
-            "Выберите стратегию бота:",
-            list(strategies.keys())
-        )
-        if st.button("Начать игру"):
-            st.session_state.game['strategy'] = strategy
-            st.rerun()
-        st.stop()
+        st.session_state.game['strategy'] = random.choice(list(strategies.keys()))
+        st.rerun()
     
     show_game()
 
