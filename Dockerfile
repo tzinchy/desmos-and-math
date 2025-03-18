@@ -16,11 +16,14 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Копируем исходный код
+# Копируем исходный код и скрипт запуска
 COPY . .
+
+# Делаем скрипт запуска исполняемым
+RUN chmod +x start.sh
 
 # Открываем порт для Streamlit
 EXPOSE 8501
 
-# Команда для запуска Streamlit
-CMD ["streamlit", "run", "main.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Используем скрипт запуска как команду по умолчанию
+CMD ["./start.sh"]
