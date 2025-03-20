@@ -354,7 +354,7 @@ $$
 Уравнение описывает все точки **(x, y, z)**, которые лежат на поверхности сферы с центром в точке **(x_sphere3, y_sphere3, z_sphere3)**. Параметр **(r_sphere3)** задает размер сферы.
 ''')
 
-    st.markdown("[Перейти к фигурам](https://www.desmos.com/3d/zwv1zeeada)")
+    st.markdown("[Перейти к фигурам](https://www.desmos.com/3d/qr2xgbo4vt)")
 
 # Навигация
 page = st.sidebar.selectbox("Выберите страницу", ["Игра", "Статистика", "Фигуры"])
